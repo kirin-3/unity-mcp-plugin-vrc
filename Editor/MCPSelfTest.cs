@@ -261,6 +261,7 @@ namespace UnityMCP.Editor
             { "ui",             TestUI },
             { "uma",            TestUMA },
             { "undo",           TestUndo },
+            { "vrc",            TestVRChat },
         };
 
         // ─── Run tests ──────────────────────────────────────────────
@@ -1248,6 +1249,20 @@ namespace UnityMCP.Editor
             catch (Exception ex)
             {
                 return $"Undo.GetUndoHistory threw: {ex.Message}";
+            }
+        }
+
+        // --- VRChat ---
+        private static string TestVRChat()
+        {
+            try
+            {
+                var result = MCPVRChatCommands.GetProjectContext();
+                return AssertNotNull(result, "VRChat.GetProjectContext");
+            }
+            catch (Exception ex)
+            {
+                return $"VRChat.GetProjectContext threw: {ex.Message}";
             }
         }
     }

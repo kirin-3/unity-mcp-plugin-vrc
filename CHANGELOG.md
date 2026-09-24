@@ -2,6 +2,46 @@
 
 All notable changes to this package will be documented in this file.
 
+## [2.40.0] - 2026-09-20
+
+Companion to server **2.36.0** — **The VRChat-Focused Toolset Release**.
+
+### Added
+- **Protocol Version 2 Bump**:
+  - The `ping` handshake now reports `protocolVersion: 2` (was 1), enabling the MCP server to dynamically advertise VRChat capabilities while preserving backward compatibility with older plugins.
+- **Project Context & Ecosystem Detection**:
+  - `vrc/project-context`: detects VRChat project type (`avatar`, `world`, or `none`) and installed ecosystem packages (Modular Avatar, NDMF, VRCFury, d4rkAvatarOptimizer, VRWorldToolkit, Poiyomi Shader) via assembly definitions and reflection.
+- **Avatar Analysis & Bake Harness**:
+  - `vrc/avatar/performance`: evaluates avatar performance rank against PC and Android/Quest thresholds across polycount, skinned meshes, material slots, PhysBones, dynamic bone limits, lights, and audio sources.
+  - `vrc/avatar/parameters`: calculates synced parameter memory against the 256-bit budget with per-type bit cost breakdown (`Bool`: 1, `Int`: 8, `Float`: 8).
+  - `vrc/avatar/audit`: checks Write Defaults consistency across playable layer animator states, detects missing/broken script references, and computes texture memory breakdown.
+  - Non-destructive bake harness: safely bakes avatars via NDMF/Modular Avatar/VRCFury/d4rk in a temporary clone scene, evaluates true runtime metrics, and cleans up without mutating scene assets.
+- **Avatar Authoring**:
+  - `vrc/avatar/descriptor/get`: inspects view position, lip-sync mode, eye look settings, and playable layers.
+  - `vrc/avatar/descriptor/set-visemes`: maps standard 15 visemes from blendshapes, reporting unmapped visemes without guessing.
+  - `vrc/avatar/descriptor/set-playable-layer`: binds AnimatorControllers to playable layers.
+  - `vrc/avatar/parameters/create`: adds/modifies expression parameters with strict 256-bit budget enforcement (over-budget additions strictly refused).
+  - `vrc/avatar/menu/get` & `vrc/avatar/menu/add-control`: inspects and adds controls to expression menus with 8-control limit protection.
+  - `vrc/physbone/add`, `vrc/physbone/configure`, `vrc/physbone/list`: authors and inspects PhysBone chains, calculating affected transform counts.
+  - `vrc/contact/add` & `vrc/contact/list`: authors and inspects VRCContactSender and VRCContactReceiver components.
+  - `vrc/avatar/modular-avatar/add` & `vrc/avatar/vrcfury/add`: adds non-destructive components, dynamically gated on package presence.
+- **Poiyomi Shader Tooling**:
+  - `vrc/poiyomi/status`: reports material lock state and paths across the scene.
+  - `vrc/poiyomi/lock` & `vrc/poiyomi/unlock`: batch locks and unlocks Poiyomi materials into optimized shaders, skipping non-Poiyomi materials.
+  - `vrc/poiyomi/get-property` & `vrc/poiyomi/set-property`: inspects and safely updates Poiyomi shader properties.
+- **VRChat World Tooling**:
+  - `vrc/world/descriptor/get`: inspects scene descriptor, spawn points, spawn order, respawn height, and reference camera.
+  - `vrc/world/descriptor/add-spawn` & `vrc/world/descriptor/set-spawns`: creates spawn points and configures spawn list.
+  - `vrc/world/udon/list` & `vrc/world/udon/get-variables`: inspects Udon behaviours and public variables with concrete types.
+  - `vrc/world/udon/set-variable`: modifies Udon public variables with strict type checking (mismatched types strictly refused).
+  - `vrc/world/validate`: runs VRWorldToolkit automated world validation and reports findings.
+  - `vrc/world/content/summary`: summarizes world contents (mirrors, lights, video players, audio sources) and flags unspatialized audio sources.
+- **VRChat Safety Guards** (`MCPVRChatGuard`):
+  - On a detected VRChat project, `build/start`, `settings/set-player`, `settings/set-quality-level`, `settings/set-physics`, `taglayer/set-layer` (reserved layers 0–22) and `physics/set-collision-layer` (reserved layers 0–22) refuse to run and return a reason naming what would break, leaving the project unchanged.
+  - Each accepts a per-call `override: true` (no environment variable, no config setting, no aliases), and an overridden call reports `guardOverridden: true`. Guards live in the route handlers, so no alternate call path bypasses them. Non-VRChat projects are unaffected.
+- **Route Registry**:
+  - Expanded from 338 to 369 registered routes across standard and VRChat tooling.
+
 ## [2.39.5] - 2026-07-27
 
 Community-reported fixes. Each claim was verified against the shipped Unity assemblies before being acted on — two held up, one did not (documented below).

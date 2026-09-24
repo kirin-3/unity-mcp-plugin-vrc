@@ -50,6 +50,9 @@ namespace UnityMCP.Editor
 
         public static object SetQualityLevel(Dictionary<string, object> args)
         {
+            if (MCPVRChatGuard.ShouldGuard(args, out var refusal, "VRChat projects pin the quality level and graphics tier. Modifying quality settings will break VRChat compatibility."))
+                return refusal;
+
             if (!args.ContainsKey("level"))
                 return new { error = "level is required (index or name)" };
 
@@ -75,12 +78,15 @@ namespace UnityMCP.Editor
                 return new { error = $"Quality level '{levelStr}' not found" };
 
             QualitySettings.SetQualityLevel(level, true);
-            return new Dictionary<string, object>
+            var result = new Dictionary<string, object>
             {
                 { "success", true },
                 { "level", level },
                 { "name", QualitySettings.names[level] },
             };
+            if (MCPVRChatGuard.HasOverride(args))
+                MCPVRChatGuard.AnnotateOverride(result);
+            return result;
         }
 
         // ─── Physics Settings ───
@@ -114,6 +120,9 @@ namespace UnityMCP.Editor
 
         public static object SetPhysicsSettings(Dictionary<string, object> args)
         {
+            if (MCPVRChatGuard.ShouldGuard(args, out var refusal, "VRChat pins physics settings (gravity, simulation rates, solver iterations). Modifying physics settings will break VRChat world and avatar synchronization."))
+                return refusal;
+
             var updated = new List<string>();
 
             if (args.ContainsKey("gravity"))
@@ -161,11 +170,14 @@ namespace UnityMCP.Editor
             if (updated.Count == 0)
                 return new { error = "No valid settings provided to update" };
 
-            return new Dictionary<string, object>
+            var result = new Dictionary<string, object>
             {
                 { "success", true },
                 { "updated", updated },
             };
+            if (MCPVRChatGuard.HasOverride(args))
+                MCPVRChatGuard.AnnotateOverride(result);
+            return result;
         }
 
         // ─── Time Settings ───
@@ -237,6 +249,9 @@ namespace UnityMCP.Editor
 
         public static object SetPlayerSettings(Dictionary<string, object> args)
         {
+            if (MCPVRChatGuard.ShouldGuard(args, out var refusal, "VRChat projects require specific Player Settings (e.g. color space, scripting backend, architecture). Modifying them will break VRChat compatibility."))
+                return refusal;
+
             var updated = new List<string>();
 
             if (args.ContainsKey("companyName"))
@@ -266,11 +281,14 @@ namespace UnityMCP.Editor
             if (updated.Count == 0)
                 return new { error = "No valid player settings provided" };
 
-            return new Dictionary<string, object>
+            var result = new Dictionary<string, object>
             {
                 { "success", true },
                 { "updated", updated },
             };
+            if (MCPVRChatGuard.HasOverride(args))
+                MCPVRChatGuard.AnnotateOverride(result);
+            return result;
         }
 
         // ─── Render Pipeline ───

@@ -269,7 +269,20 @@ namespace UnityMCP.Editor
                 SerializeObject(value);
             }
 
+            // Reflection-walked objects can nest forever (Vector3.normalized is a Vector3, so a
+            // Bounds recursed until the editor hung). Cap the walk; past it, emit null.
+            const int MaxObjectDepth = 8;
+            int objectDepth;
+
             void SerializeObject(object obj)
+            {
+                if (objectDepth >= MaxObjectDepth) { builder.Append("null"); return; }
+                objectDepth++;
+                try { SerializeObjectProperties(obj); }
+                finally { objectDepth--; }
+            }
+
+            void SerializeObjectProperties(object obj)
             {
                 builder.Append('{');
                 bool first = true;

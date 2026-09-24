@@ -11,6 +11,9 @@ namespace UnityMCP.Editor
     {
         public static object StartBuild(Dictionary<string, object> args)
         {
+            if (MCPVRChatGuard.ShouldGuard(args, out var refusal, "VRChat content is built and tested through the VRChat SDK, not standard Unity player builds. Running a standalone build will fail or produce unusable artifacts."))
+                return refusal;
+
             string targetStr = args.ContainsKey("target") ? args["target"].ToString() : "StandaloneWindows64";
             string outputPath = args.ContainsKey("outputPath") ? args["outputPath"].ToString() : "";
             bool devBuild = args.ContainsKey("developmentBuild") && Convert.ToBoolean(args["developmentBuild"]);
@@ -51,7 +54,7 @@ namespace UnityMCP.Editor
             {
                 var report = BuildPipeline.BuildPlayer(options);
 
-                return new Dictionary<string, object>
+                var result = new Dictionary<string, object>
                 {
                     { "success", report.summary.result == BuildResult.Succeeded },
                     { "result", report.summary.result.ToString() },
@@ -62,6 +65,9 @@ namespace UnityMCP.Editor
                     { "totalSize", report.summary.totalSize },
                     { "platform", report.summary.platform.ToString() },
                 };
+                if (MCPVRChatGuard.HasOverride(args))
+                    MCPVRChatGuard.AnnotateOverride(result);
+                return result;
             }
             catch (Exception ex)
             {

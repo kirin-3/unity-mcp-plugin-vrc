@@ -94,6 +94,16 @@ namespace UnityMCP.Editor
             if (layer < 0)
                 return new { error = "Valid layer index or layerName required" };
 
+            if (MCPVRChatGuard.IsReservedLayer(layer))
+            {
+                string layerName = LayerMask.LayerToName(layer);
+                string reason = $"Layers {MCPVRChatGuard.ReservedLayerMin}–{MCPVRChatGuard.ReservedLayerMax} are reserved by VRChat. Assigning GameObjects to reserved layer {layer}" +
+                    (string.IsNullOrEmpty(layerName) ? "" : $" ('{layerName}')") +
+                    " will break VRChat SDK systems and player interactions.";
+                if (MCPVRChatGuard.ShouldGuard(args, out var refusal, reason))
+                    return refusal;
+            }
+
             bool includeChildren = args.ContainsKey("includeChildren") && Convert.ToBoolean(args["includeChildren"]);
 
             Undo.RecordObject(go, "Set Layer");
@@ -108,7 +118,7 @@ namespace UnityMCP.Editor
                 }
             }
 
-            return new Dictionary<string, object>
+            var result = new Dictionary<string, object>
             {
                 { "success", true },
                 { "gameObject", go.name },
@@ -116,6 +126,9 @@ namespace UnityMCP.Editor
                 { "layerIndex", layer },
                 { "includeChildren", includeChildren },
             };
+            if (MCPVRChatGuard.HasOverride(args))
+                MCPVRChatGuard.AnnotateOverride(result);
+            return result;
         }
 
         public static object SetStatic(Dictionary<string, object> args)

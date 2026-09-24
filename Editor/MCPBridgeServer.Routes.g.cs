@@ -9,7 +9,7 @@ namespace UnityMCP.Editor
 {
     public static partial class MCPBridgeServer
     {
-        /// <summary>Every route the bridge can dispatch (338 routes).</summary>
+        /// <summary>Every route the bridge can dispatch (370 routes).</summary>
         internal static readonly string[] GeneratedRoutes = new string[]
         {
             "_meta/routes",
@@ -350,6 +350,38 @@ namespace UnityMCP.Editor
             "undo/last",
             "undo/perform",
             "undo/redo",
+            "vrc/avatar/audit",
+            "vrc/avatar/descriptor/get",
+            "vrc/avatar/descriptor/set-playable-layer",
+            "vrc/avatar/descriptor/set-visemes",
+            "vrc/avatar/job",
+            "vrc/avatar/menu/add-control",
+            "vrc/avatar/menu/get",
+            "vrc/avatar/modular-avatar/add",
+            "vrc/avatar/non-destructive/list",
+            "vrc/avatar/parameters",
+            "vrc/avatar/parameters/create",
+            "vrc/avatar/performance",
+            "vrc/avatar/vrcfury/add",
+            "vrc/contact/add",
+            "vrc/contact/list",
+            "vrc/physbone/add",
+            "vrc/physbone/configure",
+            "vrc/physbone/list",
+            "vrc/poiyomi/get-property",
+            "vrc/poiyomi/lock",
+            "vrc/poiyomi/set-property",
+            "vrc/poiyomi/status",
+            "vrc/poiyomi/unlock",
+            "vrc/project-context",
+            "vrc/world/content/summary",
+            "vrc/world/descriptor/add-spawn",
+            "vrc/world/descriptor/get",
+            "vrc/world/descriptor/set-spawns",
+            "vrc/world/udon/get-variables",
+            "vrc/world/udon/list",
+            "vrc/world/udon/set-variable",
+            "vrc/world/validate",
         };
 
         /// <summary>Fast membership lookup used for unknown-route 404s.</summary>

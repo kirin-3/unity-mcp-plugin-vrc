@@ -152,15 +152,27 @@ namespace UnityMCP.Editor
             if (layer1 < 0 || layer2 < 0)
                 return new { error = "Valid layer indices or names are required" };
 
+            if (MCPVRChatGuard.IsReservedLayer(layer1) || MCPVRChatGuard.IsReservedLayer(layer2))
+            {
+                string l1Name = LayerMask.LayerToName(layer1);
+                string l2Name = LayerMask.LayerToName(layer2);
+                string reason = $"Layers {MCPVRChatGuard.ReservedLayerMin}–{MCPVRChatGuard.ReservedLayerMax} are reserved by VRChat, and VRChat pins the collision matrix for reserved layers. Modifying collision rules involving reserved layers ({layer1}: '{l1Name}', {layer2}: '{l2Name}') will break VRChat physics and player interactions.";
+                if (MCPVRChatGuard.ShouldGuard(args, out var refusal, reason))
+                    return refusal;
+            }
+
             Physics.IgnoreLayerCollision(layer1, layer2, ignore);
 
-            return new Dictionary<string, object>
+            var result = new Dictionary<string, object>
             {
                 { "success", true },
                 { "layer1", LayerMask.LayerToName(layer1) },
                 { "layer2", LayerMask.LayerToName(layer2) },
                 { "ignoreCollision", ignore },
             };
+            if (MCPVRChatGuard.HasOverride(args))
+                MCPVRChatGuard.AnnotateOverride(result);
+            return result;
         }
 
         public static object SetGravity(Dictionary<string, object> args)

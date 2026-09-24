@@ -76,7 +76,10 @@ namespace UnityMCP.Editor
         // One monotonic int, bumped whenever the bridge gains a wire-visible capability.
         // Servers compare it to decide between fast paths and graceful fallbacks.
         // v1: baseline — advertises the handshake itself + unknown-route 404s.
-        private const int ProtocolVersion = 1;
+        // v2: VRChat routes and project-context support.
+        // v3: vrc/avatar/{performance,parameters,audit} are deferred - they return a jobId
+        //     polled via vrc/avatar/job instead of answering inline.
+        private const int ProtocolVersion = 3;
 
         private static string _pluginVersion;
         private static string PluginVersion
@@ -1493,7 +1496,73 @@ namespace UnityMCP.Editor
                     return MCPTestRunnerCommands.RunTests(ParseJson(body));
                 case "testing/get-job":
                     return MCPTestRunnerCommands.GetTestJob(ParseJson(body));
-                // testing/list-tests is handled via the deferred path in HandleRequest
+                // ─── VRChat ───
+                case "vrc/project-context":
+                    return MCPVRChatCommands.GetProjectContext();
+                case "vrc/avatar/performance":
+                    return MCPVRChatAvatarCommands.GetPerformance(ParseJson(body));
+                case "vrc/avatar/parameters":
+                    return MCPVRChatAvatarCommands.GetParameters(ParseJson(body));
+                case "vrc/avatar/audit":
+                    return MCPVRChatAvatarCommands.GetAudit(ParseJson(body));
+                case "vrc/avatar/job":
+                    return MCPVRChatJobs.GetJob(ParseJson(body));
+                case "vrc/poiyomi/status":
+                    return MCPVRChatPoiyomiCommands.GetStatus(ParseJson(body));
+                case "vrc/poiyomi/lock":
+                    return MCPVRChatPoiyomiCommands.Lock(ParseJson(body));
+                case "vrc/poiyomi/unlock":
+                    return MCPVRChatPoiyomiCommands.Unlock(ParseJson(body));
+                case "vrc/poiyomi/get-property":
+                    return MCPVRChatPoiyomiCommands.GetProperty(ParseJson(body));
+                case "vrc/poiyomi/set-property":
+                    return MCPVRChatPoiyomiCommands.SetProperty(ParseJson(body));
+                // ─── Avatar Authoring ───
+                case "vrc/avatar/descriptor/get":
+                    return MCPVRChatAuthoringCommands.GetDescriptor(ParseJson(body));
+                case "vrc/avatar/descriptor/set-visemes":
+                    return MCPVRChatAuthoringCommands.SetVisemes(ParseJson(body));
+                case "vrc/avatar/descriptor/set-playable-layer":
+                    return MCPVRChatAuthoringCommands.SetPlayableLayer(ParseJson(body));
+                case "vrc/avatar/parameters/create":
+                    return MCPVRChatAuthoringCommands.CreateParameter(ParseJson(body));
+                case "vrc/avatar/menu/get":
+                    return MCPVRChatAuthoringCommands.GetMenu(ParseJson(body));
+                case "vrc/avatar/menu/add-control":
+                    return MCPVRChatAuthoringCommands.AddMenuControl(ParseJson(body));
+                case "vrc/physbone/add":
+                    return MCPVRChatAuthoringCommands.AddPhysBone(ParseJson(body));
+                case "vrc/physbone/configure":
+                    return MCPVRChatAuthoringCommands.ConfigurePhysBone(ParseJson(body));
+                case "vrc/physbone/list":
+                    return MCPVRChatAuthoringCommands.ListPhysBones(ParseJson(body));
+                case "vrc/contact/add":
+                    return MCPVRChatAuthoringCommands.AddContact(ParseJson(body));
+                case "vrc/contact/list":
+                    return MCPVRChatAuthoringCommands.ListContacts(ParseJson(body));
+                case "vrc/avatar/non-destructive/list":
+                    return MCPVRChatAuthoringCommands.ListNonDestructive(ParseJson(body));
+                case "vrc/avatar/modular-avatar/add":
+                    return MCPVRChatAuthoringCommands.AddModularAvatarComponent(ParseJson(body));
+                case "vrc/avatar/vrcfury/add":
+                    return MCPVRChatAuthoringCommands.AddVRCFuryComponent(ParseJson(body));
+                // ─── World Tooling ───
+                case "vrc/world/descriptor/get":
+                    return MCPVRChatWorldCommands.GetDescriptor(ParseJson(body));
+                case "vrc/world/descriptor/add-spawn":
+                    return MCPVRChatWorldCommands.AddSpawn(ParseJson(body));
+                case "vrc/world/descriptor/set-spawns":
+                    return MCPVRChatWorldCommands.SetSpawns(ParseJson(body));
+                case "vrc/world/udon/list":
+                    return MCPVRChatWorldCommands.ListUdon(ParseJson(body));
+                case "vrc/world/udon/get-variables":
+                    return MCPVRChatWorldCommands.GetUdonVariables(ParseJson(body));
+                case "vrc/world/udon/set-variable":
+                    return MCPVRChatWorldCommands.SetUdonVariable(ParseJson(body));
+                case "vrc/world/validate":
+                    return MCPVRChatWorldCommands.Validate(ParseJson(body));
+                case "vrc/world/content/summary":
+                    return MCPVRChatWorldCommands.GetContentSummary(ParseJson(body));
 
                 default:
                     return new { error = $"Unknown API endpoint: {path}" };
