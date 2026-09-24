@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 
 namespace UnityMCP.Editor
 {
     /// <summary>
-    /// Deferred job registry for VRChat avatar analysis.
+    /// Deferred job registry for VRChat avatar analysis and SDK builds (vrc/build).
     ///
     /// Why these routes cannot answer synchronously: an NDMF bake blocks Unity's main thread
     /// for 20-100s (on a real avatar the texture-compression pass alone runs ~10s). The bridge
@@ -50,6 +51,15 @@ namespace UnityMCP.Editor
         /// </summary>
         public static object Start(string route, Func<object> work)
         {
+            return StartAsync(route, () => Task.FromResult(work()));
+        }
+
+        /// <summary>
+        /// As <see cref="Start"/>, for work that awaits (a VRChat SDK build): the job completes when the
+        /// task does. Continuations resume on the main thread through Unity's synchronization context.
+        /// </summary>
+        public static object StartAsync(string route, Func<Task<object>> work)
+        {
             CleanupExpired();
 
             var job = new Job
@@ -68,23 +78,7 @@ namespace UnityMCP.Editor
             tick = () =>
             {
                 EditorApplication.update -= tick;
-                try
-                {
-                    job.Result = work();
-                    job.Status = StatusCompleted;
-                }
-                catch (Exception ex)
-                {
-                    // A bake failure must surface as an error, never as partial or
-                    // scene-derived figures.
-                    job.Error = ex.Message;
-                    job.Status = StatusFailed;
-                    Debug.LogWarning($"[MCP VRChat] Job {job.JobId} ({route}) failed: {ex}");
-                }
-                finally
-                {
-                    job.FinishedAt = DateTime.UtcNow;
-                }
+                Run(job, work);
             };
             EditorApplication.update += tick;
 
@@ -96,6 +90,28 @@ namespace UnityMCP.Editor
                 { "route", route },
                 { "hint", "Poll vrc/avatar/job with this jobId until status is no longer 'running'." }
             };
+        }
+
+        // async void is safe here: every exception is caught and recorded on the job.
+        private static async void Run(Job job, Func<Task<object>> work)
+        {
+            try
+            {
+                job.Result = await work();
+                job.Status = StatusCompleted;
+            }
+            catch (Exception ex)
+            {
+                // A bake failure must surface as an error, never as partial or
+                // scene-derived figures.
+                job.Error = ex.Message;
+                job.Status = StatusFailed;
+                Debug.LogWarning($"[MCP VRChat] Job {job.JobId} ({job.Route}) failed: {ex}");
+            }
+            finally
+            {
+                job.FinishedAt = DateTime.UtcNow;
+            }
         }
 
         /// <summary>Route: vrc/avatar/job — status, and the result once finished.</summary>

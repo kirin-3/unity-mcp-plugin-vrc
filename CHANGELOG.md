@@ -2,6 +2,17 @@
 
 All notable changes to this package will be documented in this file.
 
+## [2.42.0] - 2026-09-24
+
+Companion to server **2.38.0**: VRChat SDK build.
+
+### Added
+- **Protocol Version 5**: `ping` now reports `protocolVersion: 5`. The server lists `unity_vrc_build` only when the plugin reports v5 or later.
+- `vrc/build`: builds the scene's avatar (or `avatarPath`) or the open world scene through the VRChat SDK's public builder API (`IVRCSdkAvatarBuilderApi` / `IVRCSdkWorldBuilderApi`), the same calls as the control panel's Build button: preprocessors, the SDK's validation, bundle export. `test: true` calls `BuildAndTest` instead. Only `Build` and `BuildAndTest` are ever called, so nothing uploads. Deferred like avatar analysis: it returns a jobId, polled via `vrc/avatar/job`. The result has `bundlePath`, `bundleSizeMB`, `error`/`errorType`, `validationErrors` (when the SDK's exception carries them) and `errors`, the console errors logged during the build (the avatar SDK only logs its validation issues). Opens the SDK control panel when it is closed (`TryGetBuilder` needs it). Refused in play mode, while scripts compile or have errors, and while another build runs. The SDK is reached by reflection, so the plugin still compiles without it.
+
+### Changed
+- `MCPVRChatJobs.StartAsync` runs a job that awaits; the job completes when its task does. `Start` wraps it for synchronous work.
+
 ## [2.41.0] - 2026-09-24
 
 Companion to server **2.37.0**: VRChat authoring v2.

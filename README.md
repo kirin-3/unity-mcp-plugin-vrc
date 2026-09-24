@@ -10,9 +10,9 @@ It's a UPM package that runs a local HTTP bridge (`127.0.0.1:7890`) inside the U
 
 For the full list of Unity features, see the [upstream README](https://github.com/AnkleBreaker-Studio/unity-mcp-plugin#readme).
 
-## Changes in this fork (v2.41.0)
+## Changes in this fork (v2.42.0)
 
-- **42 `vrc/*` routes** (380 routes in total):
+- **43 `vrc/*` routes** (381 routes in total):
   - **Avatar:** performance rank (PC and Quest), 256-bit parameter budget, descriptor, visemes, playable layers, parameters, menus, PhysBones, contacts, and Modular Avatar and VRCFury components.
   - **Audit:** Write Defaults, missing scripts, texture memory, animation paths that no longer resolve, mismatched mesh bounds and Anchor Overrides.
   - **VRCFury features:** create or update a Toggle (objects, blendshapes, material swaps, menu path, saved, default) and Armature Link.
@@ -22,10 +22,11 @@ For the full list of Unity features, see the [upstream README](https://github.co
   - **Bake harness:** runs NDMF, MA, VRCFury, and d4rk on a temporary clone so the metrics are real post-bake numbers. Your scene is never mutated.
   - **Poiyomi:** status, lock/unlock, and get/set property.
   - **World:** descriptor and spawns, Udon behaviours and type-safe variable writes, UdonSharp behaviour creation (script, program asset and component), VRWorldToolkit validation, and a content summary.
+  - **Build:** `vrc/build` runs the VRChat SDK's own Build, or Build & Test, and reports validation and preprocessor errors and the bundle size. It never uploads.
   - **Project context:** detects avatar, world, or none, plus the ecosystem packages installed.
 - **VRChat safety guards (`MCPVRChatGuard`):** on a VRChat project, `build/start`, `settings/set-player`, `settings/set-quality-level`, and `settings/set-physics` are refused, as are layer and collision-matrix edits on reserved layers 0–22. Pass `override: true` on a single call to run one anyway. The guards run inside the route handlers, so no other call path skips them.
 - **No hard dependency:** the plugin reaches the VRChat SDK, NDMF, MA, VRCFury, VRWorldToolkit, Gesture Manager, Av3Emulator, and UdonSharp through reflection, so it compiles and runs without them. In a non-VRChat project the VRChat routes just report that the package is missing.
-- **Protocol v4:** `ping` reports `protocolVersion: 4`. The server hides the tools a plugin's protocol can't answer.
+- **Protocol v5:** `ping` reports `protocolVersion: 5`. The server hides the tools a plugin's protocol can't answer.
 - **Fix:** `MiniJson` stops reflection walks at a fixed depth, so serializing a `Bounds` no longer hangs the editor.
 - **Tests:** VRChat EditMode tests under `Tests/Editor`, plus a `vrc` self-test category.
 

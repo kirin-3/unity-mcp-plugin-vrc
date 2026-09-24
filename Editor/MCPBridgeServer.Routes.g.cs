@@ -9,7 +9,7 @@ namespace UnityMCP.Editor
 {
     public static partial class MCPBridgeServer
     {
-        /// <summary>Every route the bridge can dispatch (380 routes).</summary>
+        /// <summary>Every route the bridge can dispatch (381 routes).</summary>
         internal static readonly string[] GeneratedRoutes = new string[]
         {
             "_meta/routes",
@@ -371,6 +371,7 @@ namespace UnityMCP.Editor
             "vrc/avatar/vrcfury/add",
             "vrc/avatar/vrcfury/armature-link",
             "vrc/avatar/vrcfury/toggle",
+            "vrc/build",
             "vrc/contact/add",
             "vrc/contact/list",
             "vrc/physbone/add",

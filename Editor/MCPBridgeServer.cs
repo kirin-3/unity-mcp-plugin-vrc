@@ -81,7 +81,8 @@ namespace UnityMCP.Editor
         //     polled via vrc/avatar/job instead of answering inline.
         // v4: VRCFury Toggle/Armature Link configuration, outfit attach, play-mode emulator control
         //     and capture, blendshape list/set, UdonSharp create/attach.
-        private const int ProtocolVersion = 4;
+        // v5: vrc/build - VRChat SDK Build / Build & Test (deferred, polled via vrc/avatar/job).
+        private const int ProtocolVersion = 5;
 
         private static string _pluginVersion;
         private static string PluginVersion
@@ -1509,6 +1510,8 @@ namespace UnityMCP.Editor
                     return MCPVRChatAvatarCommands.GetAudit(ParseJson(body));
                 case "vrc/avatar/job":
                     return MCPVRChatJobs.GetJob(ParseJson(body));
+                case "vrc/build":
+                    return MCPVRChatBuildCommands.Build(ParseJson(body));
                 case "vrc/poiyomi/status":
                     return MCPVRChatPoiyomiCommands.GetStatus(ParseJson(body));
                 case "vrc/poiyomi/lock":
