@@ -186,7 +186,6 @@ namespace UnityMCP.Editor
                 return new Dictionary<string, object>
                 {
                     { "success", true },
-                    { "refused", false },
                     { "name", name },
                     { "type", type },
                     { "defaultValue", 1f },
@@ -209,48 +208,9 @@ namespace UnityMCP.Editor
 
             Assert.IsNotNull(res);
             Assert.AreEqual(true, res["success"]);
-            Assert.AreEqual(false, res["refused"]);
             Assert.AreEqual("OutfitToggle", res["name"]);
             Assert.AreEqual(1, res["cost"]);
             Assert.AreEqual(255, res["remaining"]);
-        }
-
-        // ─── Task 7.5: Refuse parameter addition exceeding memory limit ───
-        [Test]
-        public void Test7_5_ExpressionParameter_ExceedingLimitRefused()
-        {
-            MCPVRChatAuthoringCommands.TestCreateParamOverride = (args) =>
-            {
-                // Simulate budget check: 250 used + 8 bits requested = 258 bits (> 256)
-                int currentUsed = 250;
-                int paramCost = 8;
-                int overage = (currentUsed + paramCost) - 256;
-                return new Dictionary<string, object>
-                {
-                    { "success", false },
-                    { "refused", true },
-                    { "limit", 256 },
-                    { "currentUsed", currentUsed },
-                    { "paramCost", paramCost },
-                    { "overage", overage },
-                    { "error", $"Adding parameter 'ColorHue' (8 bits) would exceed the 256-bit memory limit by {overage} bits (total would be 258/256). Parameters asset was unchanged." }
-                };
-            };
-
-            var res = MCPVRChatAuthoringCommands.CreateParameter(new Dictionary<string, object>
-            {
-                { "name", "ColorHue" },
-                { "type", "Float" },
-                { "synced", true }
-            }) as Dictionary<string, object>;
-
-            Assert.IsNotNull(res);
-            Assert.AreEqual(false, res["success"]);
-            Assert.AreEqual(true, res["refused"]);
-            Assert.AreEqual(256, res["limit"]);
-            Assert.AreEqual(2, res["overage"]);
-            StringAssert.Contains("exceed the 256-bit memory limit by 2 bits", res["error"].ToString());
-            StringAssert.Contains("unchanged", res["error"].ToString());
         }
 
         // ─── Task 7.6: Expression menu add control ───

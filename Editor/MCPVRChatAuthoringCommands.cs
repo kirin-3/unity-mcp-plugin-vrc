@@ -15,7 +15,7 @@ namespace UnityMCP.Editor
     /// - vrc/avatar/descriptor/get: inspect view position, lip-sync, eye look, playable layers, expressions
     /// - vrc/avatar/descriptor/set-visemes: auto-assign visemes from blendshapes, report unmapped
     /// - vrc/avatar/descriptor/set-playable-layer: assign controller to a playable layer
-    /// - vrc/avatar/parameters/create: add or modify expression parameter with 256-bit budget limit check
+    /// - vrc/avatar/parameters/create: add or modify expression parameter, reporting the authored bit total
     /// - vrc/avatar/menu/get: inspect expression menu controls
     /// - vrc/avatar/menu/add-control: add control to expression menu with 8-control limit check
     /// - vrc/physbone/add & vrc/physbone/configure: attach and set parameters on VRCPhysBone
@@ -623,7 +623,6 @@ namespace UnityMCP.Editor
             Array currentParams = paramsField.GetValue(expParamsAsset) as Array;
             int currentTotalCost = 0;
             int existingParamIndex = -1;
-            int existingParamCost = 0;
 
             if (currentParams != null)
             {
@@ -651,7 +650,6 @@ namespace UnityMCP.Editor
                     if (pName.Equals(name, StringComparison.OrdinalIgnoreCase))
                     {
                         existingParamIndex = i;
-                        existingParamCost = cost;
                     }
                     else
                     {
@@ -660,24 +658,10 @@ namespace UnityMCP.Editor
                 }
             }
 
-            // Check budget: current other params + new param cost
+            // Reported, never enforced: the authored asset is not what uploads. VRCFury's Parameter
+            // Compressor fits an over-256 asset at build, and VRCFury/MA add parameters the asset never
+            // lists. vrc/avatar/parameters measures the built avatar.
             int projectedTotalCost = currentTotalCost + paramCost;
-
-            // Task 7.5: Refuse a parameter addition that would exceed the memory limit
-            if (projectedTotalCost > MaxParameterCost)
-            {
-                int overage = projectedTotalCost - MaxParameterCost;
-                return new Dictionary<string, object>
-                {
-                    { "success", false },
-                    { "refused", true },
-                    { "limit", MaxParameterCost },
-                    { "currentUsed", currentTotalCost + existingParamCost },
-                    { "paramCost", paramCost },
-                    { "overage", overage },
-                    { "error", $"Adding parameter '{name}' ({paramCost} bits) would exceed the {MaxParameterCost}-bit memory limit by {overage} bits (total would be {projectedTotalCost}/{MaxParameterCost}). Parameters asset was unchanged." }
-                };
-            }
 
             // Build new array or update existing
             Undo.RecordObject(expParamsAsset, $"Create/Modify Parameter {name}");
@@ -730,7 +714,6 @@ namespace UnityMCP.Editor
             return new Dictionary<string, object>
             {
                 { "success", true },
-                { "refused", false },
                 { "name", name },
                 { "type", type },
                 { "defaultValue", defaultValue },

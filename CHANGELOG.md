@@ -44,6 +44,7 @@ Companion to server **2.37.0**: VRChat authoring v2.
 ### Fixed
 - **Avatar bakes never block the editor on a dialog** (`vrc/avatar/{performance,parameters,audit}`): the bake runs the VRChat SDK's preprocess hooks itself, in the SDK's order, and runs VRCFury's hooks without VRCFury's error dialog. A failing hook comes back as the route's error (for example VRCFury's resting-state conflict) instead of two modal dialogs that held the job until someone clicked OK.
 - **Bakes no longer leave NDMF's generated assets behind** (about 200 MB per bake): they are saved to `Packages/nadena.dev.ndmf/__Generated/__MCP_Bake` and deleted once the clone is measured, together with the `<avatar>__MCP_Bake_Clone` folders earlier versions left. NDMF otherwise clears that folder only after an upload or play mode.
+- **`vrc/avatar/parameters/create` no longer refuses a parameter that takes the asset past 256 bits.** It checked the authored asset, which is not what uploads: VRCFury's Parameter Compressor fits an over-256 asset at build, so the refusal blocked valid parameters, and parameters that VRCFury and Modular Avatar add at build were never counted. The result still reports `totalUsed`, `limit` and `remaining` for the authored asset (`refused` is gone). `vrc/avatar/parameters` measures the built avatar.
 
 ## [2.40.0] - 2026-09-20
 
