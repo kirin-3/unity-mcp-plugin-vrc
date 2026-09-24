@@ -107,6 +107,13 @@ namespace UnityMCP.Editor
                 return MCPVRChatUtil.Fail($"{sameMenu.Count} VRCFury toggles already use menu path '{menuPath}' ({string.Join(", ", where)}); remove the duplicate first.");
             }
 
+            if (actionsGiven)
+            {
+                err = FindOnOffConflict(root, vfType, toggleType, objectActionType, newActions,
+                    sameMenu.Count == 1 ? sameMenu[0].feature : null);
+                if (err != null) return MCPVRChatUtil.Fail(err);
+            }
+
             if (sameMenu.Count == 1)
             {
                 var (comp, feature) = sameMenu[0];
@@ -129,7 +136,6 @@ namespace UnityMCP.Editor
                 EditorUtility.SetDirty(comp);
                 PrefabUtility.RecordPrefabInstancePropertyModifications(comp);
 
-                AddTurnOffConflictWarnings(root, vfType, toggleType, objectActionType, feature, warnings);
                 return ToggleResult("updated", comp, root, menuPath, kept, warnings);
             }
 
@@ -152,7 +158,6 @@ namespace UnityMCP.Editor
                 return MCPVRChatUtil.Fail(err);
             }
 
-            AddTurnOffConflictWarnings(root, vfType, toggleType, objectActionType, MCPVRChatUtil.GetFieldValue(created, "content"), warnings);
             return ToggleResult("created", created, root, menuPath, 0, warnings);
         }
 
@@ -469,32 +474,36 @@ namespace UnityMCP.Editor
         }
 
         /// <summary>
-        /// VRCFury's inspector rejects "Turn Off" on an object that another toggle turns on (exclusive tags
-        /// are the supported way to do that); surface the same problem here.
+        /// One toggle turning an object on while another turns it off gives the object two resting states,
+        /// and VRCFury aborts the whole avatar build over it (exclusive tags are the supported way). Checked
+        /// before anything changes; <paramref name="thisToggle"/> is the toggle being replaced, if any.
         /// </summary>
-        private static void AddTurnOffConflictWarnings(Transform root, Type vfType, Type toggleType, Type objectActionType,
-            object thisToggle, List<string> warnings)
+        private static string FindOnOffConflict(Transform root, Type vfType, Type toggleType, Type objectActionType,
+            List<object> actions, object thisToggle)
         {
-            if (thisToggle == null) return;
-            var turnsOff = ObjectActions(thisToggle, objectActionType, "TurnOff");
-            if (turnsOff.Count == 0) return;
+            var turnsOn = ObjectActions(actions, objectActionType, "TurnOn");
+            var turnsOff = ObjectActions(actions, objectActionType, "TurnOff");
+            if (turnsOn.Count == 0 && turnsOff.Count == 0) return null;
 
             foreach (var (_, other) in FindFeatures(root, vfType, toggleType))
             {
                 if (ReferenceEquals(other, thisToggle)) continue;
-                foreach (var obj in ObjectActions(other, objectActionType, "TurnOn").Intersect(turnsOff))
+                var otherActions = GetActionsListReadOnly(other);
+                foreach (var (mine, theirs, here, there) in new[] { (turnsOff, "TurnOn", "off", "on"), (turnsOn, "TurnOff", "on", "off") })
                 {
-                    warnings.Add($"'{MCPVRChatUtil.RelPath(root, obj.transform)}' is turned off here but the toggle " +
-                                 $"'{MCPVRChatUtil.GetFieldValue(other, "name")}' turns it on. VRCFury rejects Turn Off for objects " +
-                                 "another toggle controls; use exclusiveTags instead.");
+                    var clash = mine.Intersect(ObjectActions(otherActions, objectActionType, theirs)).FirstOrDefault();
+                    if (clash == null) continue;
+                    return $"'{MCPVRChatUtil.RelPath(root, clash.transform)}' would be turned {here} here but the toggle " +
+                           $"'{MCPVRChatUtil.GetFieldValue(other, "name")}' turns it {there}; VRCFury refuses to build two toggles " +
+                           "that disagree on an object's resting state. Turn it on in both and give them a shared exclusiveTags entry instead. Nothing was changed.";
                 }
             }
+            return null;
         }
 
-        private static List<GameObject> ObjectActions(object toggle, Type objectActionType, string mode)
+        private static List<GameObject> ObjectActions(IEnumerable actions, Type objectActionType, string mode)
         {
             var result = new List<GameObject>();
-            var actions = GetActionsListReadOnly(toggle);
             if (actions == null) return result;
             foreach (var action in actions)
             {

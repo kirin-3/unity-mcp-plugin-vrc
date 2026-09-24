@@ -24,6 +24,7 @@ namespace UnityMCP.Editor
         private const string AvatarObjectReferenceType = "nadena.dev.modular_avatar.core.AvatarObjectReference";
         private const string SetupOutfitType = "nadena.dev.modular_avatar.core.editor.SetupOutfit";
         private const string SetupOutfitErrorWindowType = "nadena.dev.modular_avatar.core.editor.ESOErrorWindow";
+        private const string HaveObjReferencesType = "nadena.dev.modular_avatar.core.IHaveObjReferences";
 
         private const int MaxReportedBones = 30;
 
@@ -288,6 +289,7 @@ namespace UnityMCP.Editor
                 if (!TryAddMergeArmature(root, outfitArmature, avatarHips.parent, mergeType, out merge, out string addError))
                     return MCPVRChatUtil.Fail(addError);
             }
+            FillObjectReferences(outfit);
 
             var renamed = new List<string>();
             foreach (var kv in namesBefore)
@@ -337,6 +339,43 @@ namespace UnityMCP.Editor
             int depth = 0;
             for (var t = outfitHips; t != null && t != outfit; t = t.parent) depth++;
             return (depth == 2 || depth == 3) && outfitHips.name.Contains(avatarHips.name);
+        }
+
+        /// <summary>
+        /// Modular Avatar resolves each AvatarObjectReference's object on a later editor frame
+        /// (ObjectReferenceFixer) and records that as an undo step of its own, so a single Ctrl+Z after the
+        /// attach only reverted that. Resolving them now keeps them in the attach's undo step, and the fixer
+        /// then finds nothing to change.
+        /// </summary>
+        private static void FillObjectReferences(Transform outfit)
+        {
+            Type withReferences = MCPVRChatUtil.FindType(HaveObjReferencesType);
+            MethodInfo getReferences = withReferences?.GetMethod("GetObjectReferences");
+            if (getReferences == null) return;
+
+            foreach (var component in outfit.GetComponentsInChildren<Component>(true))
+            {
+                if (component == null || !withReferences.IsInstanceOfType(component)) continue;
+                if (!(getReferences.Invoke(component, null) is IEnumerable references)) continue;
+
+                bool recorded = false;
+                foreach (var reference in references)
+                {
+                    if (reference == null) continue;
+                    if (MCPVRChatUtil.GetFieldValue(reference, "targetObject") is GameObject existing && existing != null) continue;
+                    var type = reference.GetType();
+                    var target = type.GetMethod("Get", new[] { typeof(Component) })?.Invoke(reference, new object[] { component }) as GameObject;
+                    MethodInfo set = type.GetMethod("Set", new[] { typeof(GameObject) });
+                    if (target == null || set == null) continue;
+                    if (!recorded)
+                    {
+                        Undo.RecordObject(component, "Attach Outfit");
+                        recorded = true;
+                    }
+                    set.Invoke(reference, new object[] { target });
+                }
+                if (recorded) PrefabUtility.RecordPrefabInstancePropertyModifications(component);
+            }
         }
 
         /// <summary>Fallback for Modular Avatar versions without the SetupOutfit API.</summary>

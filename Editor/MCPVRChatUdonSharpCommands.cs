@@ -70,8 +70,9 @@ namespace UnityMCP.Editor
 
             string content = MCPVRChatUtil.GetString(args, "content");
             // An existing script given no new content is kept as it is and only gets its program asset
-            // (a U# script written with unity_script_create has none).
-            bool keepScript = string.IsNullOrWhiteSpace(content) && !overwrite && File.Exists(fullPath);
+            // (a U# script written with unity_script_create has none). overwrite never turns that into a
+            // template rewrite: it may be passed only to replace a conflicting program asset.
+            bool keepScript = string.IsNullOrWhiteSpace(content) && File.Exists(fullPath);
             if (keepScript)
             {
                 string declarationError = CheckDeclaration(File.ReadAllText(fullPath), className, $"The existing '{path}'");

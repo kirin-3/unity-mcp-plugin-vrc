@@ -212,7 +212,9 @@ namespace UnityMCP.Editor
                 if (c.Length == 0) continue;
                 int score;
                 if (c == needle) score = 0;
-                else if (c.Contains(needle) || needle.Contains(c)) score = 1 + Math.Abs(c.Length - needle.Length);
+                // Substring hits need 3+ letters on the short side, or a shape named "E" matches every typo.
+                else if (Math.Min(c.Length, needle.Length) >= 3 && (c.Contains(needle) || needle.Contains(c)))
+                    score = 1 + Math.Abs(c.Length - needle.Length);
                 else
                 {
                     int distance = Levenshtein(needle, c);

@@ -82,7 +82,8 @@ namespace UnityMCP.Editor
         [Test]
         public void Blendshapes_Set_AppliesAndRefusesUnknownNamesWithoutChanging()
         {
-            var body = AddSkin(_avatar.transform, "Body", "Smile", "Blink");
+            // "E" (a viseme-style name) must not be suggested for every typo that contains an e.
+            var body = AddSkin(_avatar.transform, "Body", "Smile", "Blink", "E");
 
             var bad = MCPVRChatBlendshapeCommands.Set(Args(("avatarPath", _avatar.name), ("meshPath", "Body"),
                 ("weights", new Dictionary<string, object> { { "Smile", 50 }, { "Smlie", 10 } }))) as Dictionary<string, object>;
@@ -135,6 +136,8 @@ namespace UnityMCP.Editor
             AnimationUtility.SetEditorCurve(broken, EditorCurveBinding.FloatCurve("Coat", typeof(GameObject), "m_IsActive"), AnimationCurve.Constant(0f, 0f, 1f));
             AnimationUtility.SetEditorCurve(broken, EditorCurveBinding.FloatCurve("Jacket", typeof(MeshRenderer), "m_Enabled"), AnimationCurve.Constant(0f, 0f, 1f));
             AnimationUtility.SetEditorCurve(broken, EditorCurveBinding.FloatCurve("Jacket", typeof(SkinnedMeshRenderer), "blendShape.Unzip"), AnimationCurve.Constant(0f, 0f, 100f));
+            // d4rk Avatar Optimizer's dummy binding is deliberate, not broken.
+            AnimationUtility.SetEditorCurve(good, EditorCurveBinding.FloatCurve("ThisHopefullyDoesntExist", typeof(GameObject), "m_IsActive"), AnimationCurve.Constant(0f, 0f, 0f));
 
             var result = MCPVRChatAuditChecks.CheckClipBindings(_avatar, new List<(string, AnimationClip)> { ("FX", good), ("FX", broken) });
             Assert.AreEqual(2, result["clipsChecked"]);
@@ -177,12 +180,17 @@ namespace UnityMCP.Editor
 
             var split = MCPVRChatAuditChecks.AuditAnchorOverrides(_avatar);
             Assert.AreEqual(false, split["consistent"]);
-            Assert.AreEqual(2, split["anchorCount"]);
+            Assert.AreEqual(2, split["probePointCount"]);
 
             hair.probeAnchor = chest;
             var shared = MCPVRChatAuditChecks.AuditAnchorOverrides(_avatar);
             Assert.AreEqual(true, shared["consistent"]);
             StringAssert.Contains("Chest", shared["summary"].ToString());
+
+            // Different anchor objects at one spot light alike (d4rk anchors each mesh to itself at the root).
+            body.probeAnchor = body.transform;
+            hair.probeAnchor = hair.transform;
+            Assert.AreEqual(true, MCPVRChatAuditChecks.AuditAnchorOverrides(_avatar)["consistent"]);
         }
 
         [Test]
@@ -323,6 +331,14 @@ namespace UnityMCP.Editor
             Assert.AreEqual(false, bad["success"]);
             StringAssert.Contains("'Glases' was not found", bad["error"].ToString());
             Assert.AreEqual(1, _avatar.GetComponents(vfType).Length, "A failed call must add nothing.");
+
+            // Clothing/Jacket now turns Hat off; turning it on elsewhere breaks VRCFury's build, so it is refused.
+            var conflict = MCPVRChatVRCFuryCommands.ConfigureToggle(Args(
+                ("avatarPath", _avatar.name), ("menuPath", "Props/Hat"),
+                ("objects", new List<object> { "Hat" }))) as Dictionary<string, object>;
+            Assert.AreEqual(false, conflict["success"]);
+            StringAssert.Contains("resting state", conflict["error"].ToString());
+            Assert.AreEqual(1, _avatar.GetComponents(vfType).Length, "A refused conflict must add nothing.");
         }
 
         [Test]
@@ -411,6 +427,29 @@ namespace UnityMCP.Editor
             Assert.AreEqual(false, res["success"]);
             StringAssert.Contains("must derive from UdonSharpBehaviour", res["error"].ToString());
             Assert.IsFalse(File.Exists(path));
+        }
+
+        [Test]
+        public void UdonSharp_OverwriteWithoutContentKeepsTheScript()
+        {
+            if (FindLoadedType("UdonSharp.UdonSharpProgramAsset") == null) Assert.Ignore("UdonSharp not present in this project.");
+            const string dir = "Assets/__MCPTest_UdonSharpKeep";
+            const string path = dir + "/KeepMe.cs";
+            const string source = "using UdonSharp;\n\npublic class KeepMe : UdonSharpBehaviour\n{\n    // hand-written\n}\n";
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(path, source);
+            try
+            {
+                // overwrite:true is how a conflicting program asset is replaced; it must never rewrite the script.
+                var res = MCPVRChatUdonSharpCommands.Create(Args(("path", path), ("overwrite", true))) as Dictionary<string, object>;
+                Assert.AreEqual(true, res["success"], res.ContainsKey("error") ? res["error"].ToString() : "");
+                Assert.AreEqual(true, res["scriptKept"]);
+                Assert.AreEqual(source, File.ReadAllText(path));
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(dir);
+            }
         }
 
         [Test]

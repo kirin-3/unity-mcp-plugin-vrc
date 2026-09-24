@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -151,8 +152,11 @@ namespace UnityMCP.Editor
             clone.transform.SetParent(null);
             clone.SetActive(true);
 
+            IDisposable generatedAssets = null;
             try
             {
+                generatedAssets = RedirectNdmfAssets();
+
                 // Run build pipeline on the clone
                 if (TestPreprocessOverride != null)
                 {
@@ -173,6 +177,47 @@ namespace UnityMCP.Editor
                 {
                     UnityEngine.Object.DestroyImmediate(clone);
                 }
+                if (generatedAssets != null)
+                {
+                    generatedAssets.Dispose();
+                    DeleteBakeAssets();
+                }
+            }
+        }
+
+        // ─── Generated assets ───
+        // NDMF saves every build's generated assets (about 200 MB for a full avatar) under a folder named
+        // after the avatar, and clears that only after an upload, which a bake never reaches. Bakes save
+        // them in a folder of their own instead, deleted once the clone has been measured.
+
+        internal const string NdmfGeneratedRoot = "Packages/nadena.dev.ndmf/__Generated";
+        internal const string BakeAssetFolder = NdmfGeneratedRoot + "/__MCP_Bake";
+
+        /// <summary>NDMF's OverrideTemporaryDirectoryScope for <see cref="BakeAssetFolder"/>, or null without NDMF.</summary>
+        private static IDisposable RedirectNdmfAssets()
+        {
+            Type scope = FindType("nadena.dev.ndmf.OverrideTemporaryDirectoryScope");
+            return scope?.GetConstructor(new[] { typeof(string) })?.Invoke(new object[] { BakeAssetFolder }) as IDisposable;
+        }
+
+        /// <summary>
+        /// Deletes the bake's generated assets, and the per-avatar folders earlier versions of this harness
+        /// left behind ("&lt;avatar&gt;__MCP_Bake_Clone"). Nothing else under NDMF's folder is touched.
+        /// </summary>
+        internal static void DeleteBakeAssets()
+        {
+            var folders = new List<string> { BakeAssetFolder };
+            if (System.IO.Directory.Exists(NdmfGeneratedRoot))
+            {
+                folders.AddRange(System.IO.Directory.GetDirectories(NdmfGeneratedRoot, "*" + CloneSuffix)
+                    .Select(d => d.Replace('\\', '/')));
+            }
+            foreach (var folder in folders)
+            {
+                if (!System.IO.Directory.Exists(folder)) continue;
+                AssetDatabase.DeleteAsset(folder);
+                FileUtil.DeleteFileOrDirectory(folder);
+                FileUtil.DeleteFileOrDirectory(folder + ".meta");
             }
         }
 
@@ -185,8 +230,9 @@ namespace UnityMCP.Editor
         /// only as SDK preprocess callbacks, so an NDMF-only bake measured the avatar without them
         /// (and required NDMF in projects that only use VRCFury). NDMF registers on this chain too.
         ///
-        /// Known cost: a failing VRCFury hook shows a modal dialog. The job then reads "running"
-        /// until the user dismisses it — the same dialog they would get on upload.
+        /// A failing hook never opens a modal dialog here: the SDK's loop and VRCFury's hooks each answer a
+        /// failure with one, which would block the editor until someone clicked OK. The same hooks run in
+        /// the same order (see <see cref="RunHooks"/>), and the failure comes back as the exception.
         /// </summary>
         public static void ExecuteBuildPipeline(GameObject clone)
         {
@@ -198,9 +244,9 @@ namespace UnityMCP.Editor
                     "Analyze the original avatar instead.");
             }
 
-            MethodInfo preprocess = FindType("VRC.SDKBase.Editor.BuildPipeline.VRCBuildPipelineCallbacks")
-                ?.GetMethod("OnPreprocessAvatar", BindingFlags.Public | BindingFlags.Static,
-                    null, new[] { typeof(GameObject) }, null);
+            Type callbacksType = FindType("VRC.SDKBase.Editor.BuildPipeline.VRCBuildPipelineCallbacks");
+            MethodInfo preprocess = callbacksType?.GetMethod("OnPreprocessAvatar", BindingFlags.Public | BindingFlags.Static,
+                null, new[] { typeof(GameObject) }, null);
             if (preprocess == null)
             {
                 throw new InvalidOperationException(
@@ -208,35 +254,96 @@ namespace UnityMCP.Editor
                     "SDK version in this project is not one this harness knows how to drive.");
             }
 
-            // The SDK catches a failing hook's exception and only returns false, so keep what the
-            // hooks logged to say why.
+            // A hook that returns false usually only logged why, so keep what the hooks logged.
             var errors = new List<string>();
             Application.LogCallback collect = (message, stackTrace, type) =>
             {
                 if (type == LogType.Error || type == LogType.Exception) errors.Add(message);
             };
             Application.logMessageReceived += collect;
-            bool ok;
+            string failedHook;
             try
             {
-                ok = (bool)preprocess.Invoke(null, new object[] { clone });
+                var hooks = callbacksType.GetField("_preprocessAvatarCallbacks", BindingFlags.NonPublic | BindingFlags.Static)
+                    ?.GetValue(null) as IList;
+                if (hooks != null)
+                {
+                    failedHook = RunHooks(hooks, clone);
+                }
+                else
+                {
+                    // An SDK without the hook list this mirrors: its own loop (with its dialog) is the fallback.
+                    failedHook = (bool)preprocess.Invoke(null, new object[] { clone }) ? null : "a VRCSDK preprocess hook";
+                }
             }
             catch (TargetInvocationException ex) when (ex.InnerException != null)
             {
-                throw new InvalidOperationException(
-                    "Avatar build hooks failed: " + ex.InnerException.Message, ex.InnerException);
+                Exception cause = ex;
+                while (cause is TargetInvocationException && cause.InnerException != null) cause = cause.InnerException;
+                Debug.LogException(cause);
+                throw new InvalidOperationException("Avatar build hooks failed: " + cause.Message, cause);
             }
             finally
             {
                 Application.logMessageReceived -= collect;
             }
 
-            if (!ok)
+            if (failedHook != null)
             {
-                throw new InvalidOperationException("Avatar build hooks failed" + (errors.Count > 0
+                throw new InvalidOperationException($"Avatar build hooks failed ({failedHook} reported a failure)" + (errors.Count > 0
                     ? ": " + string.Join(" | ", errors.Take(3))
                     : " without logging a reason; see the Unity console."));
             }
+        }
+
+        /// <summary>
+        /// The SDK's own loop (VRCBuildPipelineCallbacks.OnPreprocessAvatar): every hook in callbackOrder, stopping
+        /// at the first that returns false or throws. Returns the failing hook's name, or null. A throwing hook
+        /// surfaces as TargetInvocationException.
+        /// </summary>
+        private static string RunHooks(IList hooks, GameObject clone)
+        {
+            MethodInfo onPreprocess = FindType("VRC.SDKBase.Editor.BuildPipeline.IVRCSDKPreprocessAvatarCallback")
+                ?.GetMethod("OnPreprocessAvatar", new[] { typeof(GameObject) });
+            if (onPreprocess == null)
+                throw new InvalidOperationException("IVRCSDKPreprocessAvatarCallback.OnPreprocessAvatar was not found in this VRChat SDK.");
+
+            var ordered = hooks.Cast<object>().Where(h => h != null)
+                .OrderBy(h => h is UnityEditor.Build.IOrderedCallback o ? o.callbackOrder : 0)
+                .ToList();
+            foreach (var hook in ordered)
+            {
+                bool ok = TryRunVRCFuryHook(hook, clone) || (bool)onPreprocess.Invoke(hook, new object[] { clone });
+                if (!ok) return hook.GetType().Name;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// VRCFury wraps each hook in an error boundary that shows a modal "VRCFury Error" dialog and returns
+        /// false. This runs the hook the way that wrapper does (VrcfAvatarPreprocessor.OnPreprocessAvatar: the
+        /// hook's Process inside a VRCFuryBuildContext) minus the boundary, so the error reaches the caller.
+        /// True when it ran the hook; false when the hook is not VRCFury's or VRCFury's internals differ, and the
+        /// caller then runs it normally. Edit mode only: in play mode the wrapper also tracks which objects were
+        /// already processed.
+        /// </summary>
+        private static bool TryRunVRCFuryHook(object hook, GameObject clone)
+        {
+            if (Application.isPlaying) return false;
+            Type baseType = FindType("VF.Hooks.VrcfAvatarPreprocessor");
+            if (baseType == null || !baseType.IsInstanceOfType(hook)) return false;
+            MethodInfo process = baseType.GetMethod("Process", BindingFlags.NonPublic | BindingFlags.Instance);
+            Type contextType = FindType("VF.Utils.VRCFuryBuildContext");
+            Type objectType = process?.GetParameters().FirstOrDefault()?.ParameterType;
+            MethodInfo wrap = objectType?.GetMethod("op_Implicit", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(GameObject) }, null);
+            if (contextType == null || wrap == null || contextType.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null) == null)
+                return false;
+
+            using ((IDisposable)Activator.CreateInstance(contextType, true))
+            {
+                process.Invoke(hook, new[] { wrap.Invoke(null, new object[] { clone }) });
+            }
+            return true;
         }
 
         private static Type FindType(string fullTypeName)

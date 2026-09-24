@@ -361,8 +361,11 @@ namespace UnityMCP.Editor
                 var match = candidates.FirstOrDefault(c => c.Avatar == requested);
                 if (match == null)
                 {
-                    string driving = candidates.Count > 0 ? $" (it drives {string.Join(", ", candidates.Select(c => $"'{c.Avatar.name}'"))})" : "";
-                    error = $"No Gesture Manager or Av3Emulator is driving '{requested.name}'{driving}. " + NoEmulatorAdvice();
+                    // Waiting does not help once an emulator runs another avatar: say which one to ask for.
+                    error = candidates.Count > 0
+                        ? $"The emulator drives {string.Join(", ", candidates.Select(c => $"'{c.Avatar.name}'"))}, not '{requested.name}'. " +
+                          "Pass that avatarPath, or exit play mode and leave only this avatar active (Gesture Manager drives one avatar at a time, chosen in its inspector)."
+                        : $"No Gesture Manager or Av3Emulator is driving '{requested.name}'. " + NoEmulatorAdvice();
                 }
                 return match;
             }
@@ -726,20 +729,53 @@ namespace UnityMCP.Editor
             return null;
         }
 
+        /// <summary>
+        /// The box to frame. Skinned meshes are measured from their posed vertices: their culling bounds are
+        /// no framing box, since VRCFury's Bounding Box Fix inflates (and off-centres) them on every avatar.
+        /// </summary>
         private static bool TryGetRenderBounds(GameObject avatar, out Bounds bounds)
         {
             bounds = default;
             bool any = false;
-            foreach (var renderer in avatar.GetComponentsInChildren<Renderer>(false))
+            var baked = new Mesh { hideFlags = HideFlags.HideAndDontSave };
+            try
             {
-                if (renderer == null || !renderer.enabled) continue;
-                if (!(renderer is SkinnedMeshRenderer) && !(renderer is MeshRenderer)) continue;
-                var b = renderer.bounds;
-                if (b.size.sqrMagnitude <= 0f) continue;
-                if (!any) { bounds = b; any = true; }
-                else bounds.Encapsulate(b);
+                foreach (var renderer in avatar.GetComponentsInChildren<Renderer>(false))
+                {
+                    if (renderer == null || !renderer.enabled) continue;
+                    Bounds b;
+                    if (renderer is SkinnedMeshRenderer skin)
+                    {
+                        if (skin.sharedMesh == null) continue;
+                        skin.BakeMesh(baked, true);
+                        baked.RecalculateBounds();
+                        // Baked vertices are scaled but relative to the renderer's position and rotation.
+                        var t = skin.transform;
+                        b = TransformBounds(Matrix4x4.TRS(t.position, t.rotation, Vector3.one), baked.bounds);
+                    }
+                    else if (renderer is MeshRenderer) b = renderer.bounds;
+                    else continue;
+                    if (b.size.sqrMagnitude <= 0f) continue;
+                    if (!any) { bounds = b; any = true; }
+                    else bounds.Encapsulate(b);
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(baked);
             }
             return any;
+        }
+
+        private static Bounds TransformBounds(Matrix4x4 m, Bounds local)
+        {
+            var result = new Bounds(m.MultiplyPoint3x4(local.center), Vector3.zero);
+            for (int i = 0; i < 8; i++)
+            {
+                var sign = new Vector3((i & 1) == 0 ? -1f : 1f, (i & 2) == 0 ? -1f : 1f, (i & 4) == 0 ? -1f : 1f);
+                result.Encapsulate(m.MultiplyPoint3x4(local.center + Vector3.Scale(local.extents, sign)));
+            }
+            return result;
         }
 
         private static Vector3 GetHeadPosition(GameObject avatar, Bounds bounds)

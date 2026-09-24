@@ -13,7 +13,7 @@ namespace UnityMCP.Editor
     ///   (the classic breakage after renaming or moving something)
     /// - mesh bounds: skinned meshes whose bounds differ from the rest, so parts of the avatar cull at
     ///   different times (what VRCFury's Bounding Box Fix and Modular Avatar Mesh Settings unify)
-    /// - anchor overrides: renderers probing light at different anchors, so pieces are lit differently
+    /// - anchor overrides: renderers sampling light probes at different points, so pieces are lit differently
     ///   (what VRCFury's Anchor Override Fix and Modular Avatar Mesh Settings unify)
     /// </summary>
     internal static class MCPVRChatAuditChecks
@@ -154,6 +154,8 @@ namespace UnityMCP.Editor
         {
             // Animator-typed curves are humanoid muscles and animator parameters (AAPs), not object paths.
             if (binding.type == typeof(Animator)) return;
+            // d4rk Avatar Optimizer's dummy clips bind this path on purpose so they animate nothing.
+            if (binding.path == "ThisHopefullyDoesntExist") return;
 
             Transform target = string.IsNullOrEmpty(binding.path) ? root : root.Find(binding.path);
             if (target == null)
@@ -306,47 +308,67 @@ namespace UnityMCP.Editor
                 return result;
             }
 
+            // Renderers light alike when they sample probes at the same point, whatever object anchors them:
+            // d4rk Avatar Optimizer anchors each mesh to its own transform, which for meshes at the avatar
+            // root is one shared point.
             const string none = "(none)";
-            var groups = renderers
-                .GroupBy(r => r.probeAnchor != null ? PathOf(root, r.probeAnchor) : none)
-                .OrderByDescending(g => g.Count())
-                .ThenBy(g => g.Key, StringComparer.Ordinal)
-                .ToList();
+            string AnchorOf(Renderer r) => r.probeAnchor != null ? PathOf(root, r.probeAnchor) : none;
+            var groups = new List<(Vector3 point, List<Renderer> members)>();
+            foreach (var r in renderers)
+            {
+                Vector3 p = ProbePoint(r);
+                var group = groups.FirstOrDefault(g => (g.point - p).sqrMagnitude <= ProbePointTolerance * ProbePointTolerance);
+                if (group.members != null) group.members.Add(r);
+                else groups.Add((p, new List<Renderer> { r }));
+            }
+            groups = groups.OrderByDescending(g => g.members.Count).ToList();
 
             bool consistent = groups.Count <= 1;
             result["consistent"] = consistent;
-            result["anchorCount"] = groups.Count;
-            result["anchors"] = groups.Select(g => (object)new Dictionary<string, object>
+            result["probePointCount"] = groups.Count;
+            result["probePoints"] = groups.Select(g =>
             {
-                { "anchor", g.Key },
-                { "rendererCount", g.Count() },
-                { "renderers", g.Take(5).Select(r => PathOf(root, r.transform)).ToList() }
+                var anchors = g.members.Select(AnchorOf).Distinct().ToList();
+                var entry = new Dictionary<string, object>
+                {
+                    { "anchor", anchors[0] },
+                    { "rendererCount", g.members.Count },
+                    { "renderers", g.members.Take(5).Select(r => PathOf(root, r.transform)).ToList() }
+                };
+                if (anchors.Count > 1) entry["otherAnchorsAtThisPoint"] = anchors.Count - 1;
+                return (object)entry;
             }).ToList();
 
-            if (!consistent)
-            {
-                string majority = groups[0].Key;
-                result["majorityAnchor"] = majority;
-                result["mismatched"] = renderers
-                    .Where(r => (r.probeAnchor != null ? PathOf(root, r.probeAnchor) : none) != majority)
-                    .Take(MaxListed)
-                    .Select(r => PathOf(root, r.transform))
-                    .ToList();
-            }
-
+            string majority = AnchorOf(groups[0].members[0]);
             if (consistent)
             {
-                result["summary"] = groups[0].Key == none
-                    ? $"None of the {renderers.Count} renderer(s) has an Anchor Override, so each samples light probes at its own bounds centre; pieces can be lit differently. Setting one shared anchor (e.g. the chest) fixes that."
-                    : $"All {renderers.Count} renderer(s) share the anchor '{groups[0].Key}'.";
+                result["summary"] = majority == none
+                    ? $"All {renderers.Count} renderer(s) sample light probes at the same point without an Anchor Override."
+                    : $"All {renderers.Count} renderer(s) sample light probes at the same point (anchor '{majority}').";
             }
             else
             {
+                result["majorityAnchor"] = majority;
+                result["mismatched"] = groups.Skip(1).SelectMany(g => g.members).Take(MaxListed)
+                    .Select(r => PathOf(root, r.transform)).ToList();
                 result["summary"] =
-                    $"Renderers use {groups.Count} different anchors, so parts of the avatar are lit from different points. " +
+                    $"Renderers sample light probes at {groups.Count} different points, so parts of the avatar can be lit differently " +
+                    "(without an Anchor Override a renderer samples at its own bounds centre). " +
                     "VRCFury's Anchor Override Fix or Modular Avatar Mesh Settings set one shared anchor.";
             }
             return result;
+        }
+
+        private const float ProbePointTolerance = 0.05f;
+
+        /// <summary>Where Unity samples light probes for a renderer: its anchor, else its bounds centre.</summary>
+        private static Vector3 ProbePoint(Renderer r)
+        {
+            if (r.probeAnchor != null) return r.probeAnchor.position;
+            if (r is SkinnedMeshRenderer skin) return WorldBounds(skin).center;
+            var filter = r.GetComponent<MeshFilter>();
+            var mesh = filter != null ? filter.sharedMesh : null;
+            return mesh != null ? r.transform.TransformPoint(mesh.bounds.center) : r.transform.position;
         }
 
         /// <summary>Renderers under a Rigidbody are dropped into the world; VRCFury's Anchor Override Fix skips them too.</summary>
