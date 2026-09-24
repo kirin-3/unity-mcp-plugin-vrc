@@ -1311,6 +1311,10 @@ namespace UnityMCP.Editor
                 return new Dictionary<string, object> { { "error", err ?? "Avatar not found." } };
             }
 
+            // includeDetails adds each component's configuration (for VRCFury, the feature inside it).
+            bool includeDetails = args != null && args.TryGetValue("includeDetails", out var detailsArg)
+                                  && MCPVRChatUtil.TryReadBool(detailsArg, out bool detailsWanted) && detailsWanted;
+
             var results = new List<Dictionary<string, object>>();
             var comps = avatar.GetComponentsInChildren<Component>(true);
 
@@ -1327,26 +1331,36 @@ namespace UnityMCP.Editor
                     typeName.StartsWith("ModularAvatar", StringComparison.OrdinalIgnoreCase))
                 {
                     string role = DeriveModularAvatarRole(c, typeName);
-                    results.Add(new Dictionary<string, object>
+                    var entry = new Dictionary<string, object>
                     {
                         { "objectPath", GetRelativePath(avatar.transform, c.transform) },
                         { "tool", "Modular Avatar" },
                         { "componentType", typeName },
                         { "role", role }
-                    });
+                    };
+                    if (includeDetails) entry["details"] = MCPVRChatUtil.DumpComponentFields(c, avatar.transform);
+                    results.Add(entry);
                 }
                 // Check VRCFury
                 else if (fullName.IndexOf("VRCFury", StringComparison.OrdinalIgnoreCase) >= 0 ||
                          typeName.StartsWith("VRCFury", StringComparison.OrdinalIgnoreCase))
                 {
                     string role = DeriveVRCFuryRole(c);
-                    results.Add(new Dictionary<string, object>
+                    var entry = new Dictionary<string, object>
                     {
                         { "objectPath", GetRelativePath(avatar.transform, c.transform) },
                         { "tool", "VRCFury" },
                         { "componentType", typeName },
                         { "role", role }
-                    });
+                    };
+                    if (includeDetails)
+                    {
+                        object feature = MCPVRChatUtil.GetFieldValue(c, "content");
+                        entry["details"] = feature != null
+                            ? MCPVRChatUtil.DumpManaged(feature, avatar.transform)
+                            : MCPVRChatUtil.DumpComponentFields(c, avatar.transform);
+                    }
+                    results.Add(entry);
                 }
             }
 
@@ -1380,7 +1394,18 @@ namespace UnityMCP.Editor
         private static string DeriveVRCFuryRole(Component c)
         {
             Type t = c.GetType();
-            // VRCFury components typically carry a list of features or a component type
+
+            // Current VRCFury: one feature per component, in its [SerializeReference] content.
+            object content = MCPVRChatUtil.GetFieldValue(c, "content");
+            if (content != null)
+            {
+                string featureName = content.GetType().Name;
+                if (featureName == "Toggle" && MCPVRChatUtil.GetFieldValue(content, "name") is string menu && menu.Length > 0)
+                    return $"VRCFury Feature: Toggle ('{menu}')";
+                return $"VRCFury Feature: {featureName}";
+            }
+
+            // Legacy components carry a list of features or a component type
             var prop = t.GetProperty("features") ?? t.GetProperty("config");
             var field = t.GetField("features") ?? t.GetField("config");
             object val = prop != null ? prop.GetValue(c, null) : field?.GetValue(c);

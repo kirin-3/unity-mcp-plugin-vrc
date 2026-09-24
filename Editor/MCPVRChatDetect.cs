@@ -255,7 +255,10 @@ namespace UnityMCP.Editor
                 ("ndmf", "nadena.dev.ndmf", "nadena.dev.ndmf"),
                 ("vrcfury", "com.vrcfury.vrcfury", "VRCFury"),
                 ("d4rkOptimizer", "d4rkpl4y3r.d4rkavataroptimizer", "d4rkpl4y3r.d4rkavataroptimizer"),
-                ("vrWorldToolkit", "dev.onevr.vrworldtoolkit", "VRWorldToolkit")
+                ("vrWorldToolkit", "dev.onevr.vrworldtoolkit", "VRWorldToolkit"),
+                // Play-mode avatar emulators (vrc/avatar/playmode/*)
+                ("gestureManager", "vrchat.blackstartx.gesture-manager", "vrchat.blackstartx.gesture-manager"),
+                ("av3Emulator", "lyuma.av3emulator", "lyuma.av3emulator")
             };
 
             foreach (var (key, packageId, asmName) in packageDefinitions)

@@ -9,7 +9,7 @@ namespace UnityMCP.Editor
 {
     public static partial class MCPBridgeServer
     {
-        /// <summary>Every route the bridge can dispatch (370 routes).</summary>
+        /// <summary>Every route the bridge can dispatch (380 routes).</summary>
         internal static readonly string[] GeneratedRoutes = new string[]
         {
             "_meta/routes",
@@ -351,6 +351,8 @@ namespace UnityMCP.Editor
             "undo/perform",
             "undo/redo",
             "vrc/avatar/audit",
+            "vrc/avatar/blendshapes/list",
+            "vrc/avatar/blendshapes/set",
             "vrc/avatar/descriptor/get",
             "vrc/avatar/descriptor/set-playable-layer",
             "vrc/avatar/descriptor/set-visemes",
@@ -359,10 +361,16 @@ namespace UnityMCP.Editor
             "vrc/avatar/menu/get",
             "vrc/avatar/modular-avatar/add",
             "vrc/avatar/non-destructive/list",
+            "vrc/avatar/outfit/attach",
             "vrc/avatar/parameters",
             "vrc/avatar/parameters/create",
             "vrc/avatar/performance",
+            "vrc/avatar/playmode/capture",
+            "vrc/avatar/playmode/set",
+            "vrc/avatar/playmode/status",
             "vrc/avatar/vrcfury/add",
+            "vrc/avatar/vrcfury/armature-link",
+            "vrc/avatar/vrcfury/toggle",
             "vrc/contact/add",
             "vrc/contact/list",
             "vrc/physbone/add",
@@ -381,6 +389,8 @@ namespace UnityMCP.Editor
             "vrc/world/udon/get-variables",
             "vrc/world/udon/list",
             "vrc/world/udon/set-variable",
+            "vrc/world/udonsharp/attach",
+            "vrc/world/udonsharp/create",
             "vrc/world/validate",
         };
 
