@@ -2,6 +2,49 @@
 
 All notable changes to this package will be documented in this file.
 
+## [2.41.0] - 2026-09-24
+
+Companion to server **2.37.0**: VRChat authoring v2.
+
+### Added
+- **Protocol Version 4**:
+  - `ping` now reports `protocolVersion: 4`. The server lists the tools below only when the plugin reports v4 or later, so an older plugin is never sent a tool it can't answer.
+- **VRCFury feature configuration** (features are `[SerializeReference]`, so `component/set-property` could not create them):
+  - `vrc/avatar/vrcfury/toggle`: creates or updates a Toggle, identified by its menu path. Supports object on/off, blendshapes (checked against the meshes, with close-name suggestions), material swaps, `saved`, `defaultOn`, `slider`, exclusive tags, `exclusiveOffState` and a global parameter. An update replaces only the object, blendshape and material actions and keeps every other action. When two Toggles share the menu path, the call is refused instead of picking one. A toggle that would turn an object on while another turns it off (or the reverse) is refused before anything changes, because VRCFury aborts the build when two toggles disagree on an object's resting state.
+  - `vrc/avatar/vrcfury/armature-link`: adds or updates an Armature Link. `linkTo` takes a humanoid bone name or an avatar path. `recursive` and `align` default to what the prop's skinned meshes need. The result includes the predicted bone matching.
+  - New features serialize at VRCFury's latest version, so VRCFury's upgrader leaves them alone. Everything goes through reflection, so the plugin still compiles without VRCFury.
+- **Outfit attach**:
+  - `vrc/avatar/outfit/attach`: instantiates a clothing prefab (or reparents a scene object) under a humanoid avatar and merges it with Modular Avatar Merge Armature or VRCFury Armature Link. `method: auto` prefers the component the outfit already carries, then the installed package. Every input is checked before anything changes, and a failed merge undoes the whole attach in one step (`rolledBack: true`). A successful attach is also a single undo step: Modular Avatar's object references are resolved inside it rather than in a separate step Modular Avatar records on a later frame.
+  - The result lists the outfit bones that won't merge, the avatar bone each one probably meant, and the likely cause: a shared prefix or suffix, or a case or punctuation difference.
+  - Modular Avatar's own Setup Outfit runs when it can do so without opening its error dialog. Otherwise the plugin adds Merge Armature directly.
+- **Play-mode testing** (Gesture Manager or Av3Emulator):
+  - `vrc/avatar/playmode/status`: reports whether play mode and an emulator are running, with the live parameter values. In edit mode it reports which emulators are in the scene and whether compile errors would block play mode. When none is in the scene, it names the menu item that adds one (`Tools/Gesture Manager Emulator`, `Tools/Avatars 3.0 Emulator/Enable`).
+  - `vrc/avatar/playmode/set`: sets parameters, `GestureLeft`/`GestureRight` (0–7 or names such as `fist` and `peace`) and gesture weights through the emulator's own API, because both emulators overwrite Animator parameters every frame. Every value is checked first, so one bad name changes nothing.
+  - `vrc/avatar/playmode/capture`: renders the avatar with a temporary camera framed on its meshes' posed vertices (`front`, `back`, `left`, `right`, `face`) and returns a PNG. Culling bounds are not used for framing, because VRCFury's Bounding Box Fix inflates and off-centres them. Works in edit mode too and needs no scene camera.
+- **Audit checks** (`vrc/avatar/audit`, run on the same baked clone as the existing checks):
+  - `animationPaths`: clip bindings that point at objects, components or blendshapes that no longer exist, the usual result of a rename or move. d4rk Avatar Optimizer's deliberate dummy binding is not reported.
+  - `meshBounds`: skinned meshes whose bounds differ from the avatar's overall box (they cull at different times), plus meshes using `updateWhenOffscreen`.
+  - `anchorOverrides`: renderers grouped by where they sample light probes (the anchor's position, else the bounds centre), so anchors on different objects at one spot count as consistent. Lists the renderers outside the largest group (`probePointCount`, `probePoints`, `mismatched`).
+  - A check that throws reports `{error}` for itself without failing the audit.
+- **Blendshapes**:
+  - `vrc/avatar/blendshapes/list`: lists a mesh's blendshape names and weights. The mesh defaults to the descriptor's viseme mesh, then a Body/Face/Head mesh. `faceTracking: true` adds Unified Expressions, ARKit and SRanipal coverage (found, missing and the detected standard) and names a better-covered mesh if there is one.
+  - `vrc/avatar/blendshapes/set`: sets weights by name, checks every name first (with suggestions) and records Undo.
+- **UdonSharp** (worlds):
+  - `vrc/world/udonsharp/create`: writes an `UdonSharpBehaviour` script and its program asset next to it, reusing an existing program asset for the same script. Given an existing script and no `content`, it keeps the script and only adds the program asset, e.g. for a script written with `script/create`. `overwrite` never changes that: without `content` it only replaces a conflicting program asset.
+  - `vrc/world/udonsharp/attach`: attaches the behaviour through UdonSharp's own `AddComponent`, which creates the backing `UdonBehaviour`. Returns `pending: true` while Unity is still compiling, so the caller can retry.
+- **Non-destructive component details**:
+  - `vrc/avatar/non-destructive/list` accepts `includeDetails: true` and returns each MA component's fields and each VRCFury feature's settings. VRCFury components are now labeled by feature, e.g. `VRCFury Feature: Toggle ('Clothes/Jacket')`.
+- **Ecosystem detection**:
+  - `vrc/project-context` also reports Gesture Manager (`gestureManager`) and Av3Emulator (`av3Emulator`).
+- **Tests**:
+  - `MCPVRChatAuthoringV2Tests` covers the new routes. The VRCFury tests are skipped when VRCFury isn't installed, and the capture test when no GPU is available.
+- **Route Registry**:
+  - Expanded from 370 to 380 registered routes (42 `vrc/*` routes).
+
+### Fixed
+- **Avatar bakes never block the editor on a dialog** (`vrc/avatar/{performance,parameters,audit}`): the bake runs the VRChat SDK's preprocess hooks itself, in the SDK's order, and runs VRCFury's hooks without VRCFury's error dialog. A failing hook comes back as the route's error (for example VRCFury's resting-state conflict) instead of two modal dialogs that held the job until someone clicked OK.
+- **Bakes no longer leave NDMF's generated assets behind** (about 200 MB per bake): they are saved to `Packages/nadena.dev.ndmf/__Generated/__MCP_Bake` and deleted once the clone is measured, together with the `<avatar>__MCP_Bake_Clone` folders earlier versions left. NDMF otherwise clears that folder only after an upload or play mode.
+
 ## [2.40.0] - 2026-09-20
 
 Companion to server **2.36.0** — **The VRChat-Focused Toolset Release**.

@@ -149,6 +149,36 @@ namespace UnityMCP.Editor
             Assert.IsFalse(response.ContainsKey("categories"), "Must NOT return categories on failure.");
         }
 
+        // NDMF keeps each build's generated assets until an upload; a bake must not leave its own behind.
+        [Test]
+        public void BakeHarness_RedirectsAndDeletesNdmfGeneratedAssets()
+        {
+            Type processor = null;
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                processor = processor ?? asm.GetType("nadena.dev.ndmf.AvatarProcessor");
+            var root = processor?.GetField("TemporaryAssetRoot", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            if (root == null) Assert.Ignore("NDMF not present in this project.");
+
+            // A folder an earlier harness version left behind, named after its clone.
+            string legacy = MCPVRChatBakeHarness.NdmfGeneratedRoot + "/Old" + MCPVRChatBakeHarness.CloneSuffix;
+            System.IO.Directory.CreateDirectory(legacy);
+            string before = (string)root.GetValue(null);
+
+            MCPVRChatBakeHarness.TestDetectBuildToolingOverride = (av) => new List<string> { "Modular Avatar" };
+            MCPVRChatBakeHarness.TestPreprocessOverride = (clone) =>
+            {
+                Assert.AreEqual(MCPVRChatBakeHarness.BakeAssetFolder, root.GetValue(null), "NDMF must save into the bake's own folder.");
+                System.IO.Directory.CreateDirectory(MCPVRChatBakeHarness.BakeAssetFolder + "/" + clone.name);
+                System.IO.File.WriteAllText(MCPVRChatBakeHarness.BakeAssetFolder + "/" + clone.name + "/generated.txt", "x");
+            };
+
+            MCPVRChatBakeHarness.RunBakeAndAnalyze(_testAvatar, (clone, tooling) => 0);
+
+            Assert.AreEqual(before, root.GetValue(null), "NDMF's folder setting must be restored.");
+            Assert.IsFalse(System.IO.Directory.Exists(MCPVRChatBakeHarness.BakeAssetFolder), "The bake's generated assets must be deleted.");
+            Assert.IsFalse(System.IO.Directory.Exists(legacy), "Folders earlier harness versions left behind must be deleted.");
+        }
+
         // ─── Task 5.6: Performance route reports rank, categories with thresholds, and limiting stat ───
         [Test]
         public void Test5_6_PerformanceRoute_ReportsRankThresholdsAndLimitingStat()

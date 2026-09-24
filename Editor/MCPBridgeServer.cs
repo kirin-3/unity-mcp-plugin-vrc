@@ -79,7 +79,9 @@ namespace UnityMCP.Editor
         // v2: VRChat routes and project-context support.
         // v3: vrc/avatar/{performance,parameters,audit} are deferred - they return a jobId
         //     polled via vrc/avatar/job instead of answering inline.
-        private const int ProtocolVersion = 3;
+        // v4: VRCFury Toggle/Armature Link configuration, outfit attach, play-mode emulator control
+        //     and capture, blendshape list/set, UdonSharp create/attach.
+        private const int ProtocolVersion = 4;
 
         private static string _pluginVersion;
         private static string PluginVersion
@@ -1546,6 +1548,23 @@ namespace UnityMCP.Editor
                     return MCPVRChatAuthoringCommands.AddModularAvatarComponent(ParseJson(body));
                 case "vrc/avatar/vrcfury/add":
                     return MCPVRChatAuthoringCommands.AddVRCFuryComponent(ParseJson(body));
+                case "vrc/avatar/vrcfury/toggle":
+                    return MCPVRChatVRCFuryCommands.ConfigureToggle(ParseJson(body));
+                case "vrc/avatar/vrcfury/armature-link":
+                    return MCPVRChatVRCFuryCommands.ConfigureArmatureLink(ParseJson(body));
+                case "vrc/avatar/outfit/attach":
+                    return MCPVRChatOutfitCommands.Attach(ParseJson(body));
+                case "vrc/avatar/blendshapes/list":
+                    return MCPVRChatBlendshapeCommands.List(ParseJson(body));
+                case "vrc/avatar/blendshapes/set":
+                    return MCPVRChatBlendshapeCommands.Set(ParseJson(body));
+                // ─── Play Mode Testing (Gesture Manager / Av3Emulator) ───
+                case "vrc/avatar/playmode/status":
+                    return MCPVRChatPlayModeCommands.GetStatus(ParseJson(body));
+                case "vrc/avatar/playmode/set":
+                    return MCPVRChatPlayModeCommands.Set(ParseJson(body));
+                case "vrc/avatar/playmode/capture":
+                    return MCPVRChatPlayModeCommands.Capture(ParseJson(body));
                 // ─── World Tooling ───
                 case "vrc/world/descriptor/get":
                     return MCPVRChatWorldCommands.GetDescriptor(ParseJson(body));
@@ -1563,6 +1582,10 @@ namespace UnityMCP.Editor
                     return MCPVRChatWorldCommands.Validate(ParseJson(body));
                 case "vrc/world/content/summary":
                     return MCPVRChatWorldCommands.GetContentSummary(ParseJson(body));
+                case "vrc/world/udonsharp/create":
+                    return MCPVRChatUdonSharpCommands.Create(ParseJson(body));
+                case "vrc/world/udonsharp/attach":
+                    return MCPVRChatUdonSharpCommands.Attach(ParseJson(body));
 
                 default:
                     return new { error = $"Unknown API endpoint: {path}" };

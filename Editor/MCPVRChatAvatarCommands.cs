@@ -13,7 +13,8 @@ namespace UnityMCP.Editor
     /// VRChat Avatar analysis commands:
     /// - vrc/avatar/performance: performance rank and contributing statistics
     /// - vrc/avatar/parameters: synced parameter memory budget and per-parameter cost
-    /// - vrc/avatar/audit: Write Defaults consistency, missing scripts, and texture memory
+    /// - vrc/avatar/audit: Write Defaults consistency, missing scripts, texture memory, animation paths,
+    ///   mesh bounds and anchor overrides (MCPVRChatAuditChecks)
     /// </summary>
     public static class MCPVRChatAvatarCommands
     {
@@ -389,7 +390,11 @@ namespace UnityMCP.Editor
                         { "missingScripts", missingScriptsResult },
                         { "missingScriptsCount", missingScriptsResult.Count },
                         { "hasMissingScripts", missingScriptsResult.Count > 0 },
-                        { "textureMemory", textureResult }
+                        { "textureMemory", textureResult },
+                        // 4-6. Checked on the baked clone, after the tooling rewrote paths and meshes.
+                        { "animationPaths", RunCheck(() => MCPVRChatAuditChecks.AuditAnimationPaths(clone)) },
+                        { "meshBounds", RunCheck(() => MCPVRChatAuditChecks.AuditMeshBounds(clone)) },
+                        { "anchorOverrides", RunCheck(() => MCPVRChatAuditChecks.AuditAnchorOverrides(clone)) }
                     };
                 });
             }
@@ -399,6 +404,19 @@ namespace UnityMCP.Editor
                 {
                     { "error", $"Avatar audit failed: {ex.Message}" }
                 };
+            }
+        }
+
+        /// <summary>One failing check reports its own error instead of sinking the whole audit.</summary>
+        private static object RunCheck(Func<Dictionary<string, object>> check)
+        {
+            try
+            {
+                return check();
+            }
+            catch (Exception ex)
+            {
+                return new Dictionary<string, object> { { "error", $"Check failed: {ex.Message}" } };
             }
         }
 
